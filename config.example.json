@@ -34,6 +34,36 @@
     "groups": []
   },
   "allowAllWhenEmpty": false,
+  "allowNoConsoleToken": false,
+  "bootGreeting": {
+    "enabled": false,
+    "to": null,
+    "text": "<YOUR_QQ> 醒了（示例，请改成你的文案）",
+    "delayMs": 3000
+  },
+  "farewell": {
+    "to": null,
+    "text": "再见（示例）"
+  },
+  "dailyQuota": {
+    "enabled": true,
+    "groupLimit": 100,
+    "groupWarnAt": 80,
+    "privateLimit": 30,
+    "privateWarnAt": 24,
+    "exemptOwners": [],
+    "warnImage": "",
+    "warnText": "",
+    "warnMessage": "额度快用完了"
+  },
+  "persona": {
+    "enabled": false,
+    "name": "",
+    "tone": "",
+    "style": "",
+    "forbid": "",
+    "extra": ""
+  },
   "ackMessage": "",
   "sendDelayMs": 300,
   "questionTimeoutMs": 300000,
@@ -140,7 +170,9 @@
       "stickerNote": true,
       "collectSticker": true,
       "getSelfImage": true,
-      "sendVoice": false
+      "sendVoice": false,
+      "getHourlySummary": true,
+      "sendForward": true
     },
     "wake": {
       "defaultMode": "diving",
@@ -249,6 +281,16 @@
       "wakeMessageLimit": 12,
       "wakeRecentLimit": 4,
       "wakeMaxChars": 6000
-    }
+    },
+    "hourly": {
+      "enabled": true,
+      "windowMs": 3600000,
+      "maxBlocks": 24,
+      "maxBlockChars": 320,
+      "keyPointsPerHour": 3,
+      "keyPointChars": 90
+    },
+    "crossGroup": false,
+    "sessionMode": "per-conversation"
   }
 }

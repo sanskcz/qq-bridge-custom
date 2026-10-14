@@ -169,6 +169,39 @@ npm install        # 安装依赖（postinstall 会自动修补 @snowluma/sdk �
 
 > ⚠️ `allowAllWhenEmpty: true` 表示「白名单没填就全部放行」——把 agent 接入 QQ 等于把账号控制权交给了模型，建议先填白名单。
 
+#### 本仓库新增的配置项
+
+以下字段**不在上游模板里**，是本仓库的扩展。全部有合理默认值，不填也能跑；
+其中大部分也能在控制台面板里直接改（**改完立即生效，不需要重启**）。
+
+| 字段 | 说明 | 默认 |
+| --- | --- | --- |
+| `allowNoConsoleToken` | `true` = **完全关闭控制台鉴权**，免令牌打开面板。⚠️ 此后任何本机进程都能改配置、看聊天记录 | `false` |
+| `bootGreeting.enabled` / `.to` / `.text` / `.delayMs` | 桥接启动成功后，向 `.to` 私聊发一条报到消息 | 关闭 |
+| `farewell.to` / `.text` | `dsh-stop.bat` 停止前发送的告别消息 | 关闭 |
+| `dailyQuota.enabled` | 每日配额与预警总开关 | `true` |
+| `dailyQuota.groupLimit` / `.groupWarnAt` | 群聊每日上限 / 预警点（发到预警点补发一次提醒） | `100` / `80` |
+| `dailyQuota.privateLimit` / `.privateWarnAt` | 私聊每日上限 / 预警点 | `30` / `24` |
+| `dailyQuota.exemptOwners` | 豁免的 QQ 号数组：**不计数、不预警、不拦截** | `[]` |
+| `dailyQuota.warnImage` / `.warnText` | 预警时附带的图片路径与文案；`warnImage` 留空则只发文案 | 无图 |
+| `persona.enabled` | 人设总开关（控制台可编辑） | `false` |
+| `persona.name` / `.tone` / `.style` / `.forbid` / `.extra` | 人设五项：称呼 / 性格 / 说话习惯 / 绝对不做的事 / 补充 | 空 |
+| `socialV2.hourly.enabled` | 按时滚动记忆开关 | `true` |
+| `socialV2.hourly.windowMs` | **原文保留时长**，超出部分压成小时摘要后丢弃 | `3600000`（1 小时） |
+| `socialV2.hourly.maxBlockChars` | 单个小时摘要的字符上限（防摘要自身膨胀） | `320` |
+| `socialV2.hourly.maxBlocks` | 最多保留几个小时块 | `24` |
+| `socialV2.crossGroup` | `true` = 任一活跃会话令牌可读其它会话（跨群读取 + 跨群转发） | `false` |
+| `socialV2.sessionMode` | `shared` = 所有会话共用一段上下文；`per-conversation` = 各自独立 | `per-conversation` |
+| `socialV2.tools.getHourlySummary` | 是否开放「读小时摘要」工具 | `true` |
+| `socialV2.tools.sendForward` | 是否开放「合并转发」工具 | `true` |
+
+> ⚠️ **`persona` 只覆盖语气与说话方式，不能覆盖安全规则。**
+> 控制台保存时会拒绝包含「改写规则」意图的内容 —— 否则这个输入框就成了
+> 绕过「不给命令 / 不给文件 / 不交令牌」的捷径。
+
+> ⚠️ **`socialV2.crossGroup` 涉及隐私**：开启后 A 群的发言可能被转发到 B 群，
+> 而 A 群成员看不到。请自行判断是否合适、是否需要告知群友。
+
 ### DSH 端安装（必做：装 preset + 挂 MCP）
 
 桥接和控制台能跑起来还不够，DSH 端还需要安装两个聊天 preset（`qq-chat` / `qq-chat-v2`）并挂载 MCP。**单机新装同样必须执行这一步**（不是只有「另一台设备」才需要），装完还要**重启 DSH**：
