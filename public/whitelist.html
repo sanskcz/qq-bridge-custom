@@ -218,6 +218,23 @@ const qsToken = new URLSearchParams(location.search).get('token');
 let token = qsToken || localStorage.getItem('dsh-qq-console-token') || '';
 let state = null;   // { allow, deny, ownerQQ, groups:[{id,name}] }
 let dirty = false;
+// 服务端是否需要令牌：初始为 null（未探测）。探测后才能决定要不要显示登录卡片。
+// ⚠️ 不能默认 true：本机可以把 config 的 allowNoConsoleToken 设为 true 关闭服务端鉴权，
+// 此时若页面仍死等令牌，面板会被永久挡在登录卡片后面（且令牌文件可能已被删除 → 谁都进不去）。
+let authRequired = null;
+
+/** 探测服务端鉴权状态：不带令牌请求一次，401/403 说明需要令牌。 */
+async function probeAuth() {
+  try {
+    const res = await fetch('/api/whitelist', { headers: token ? { 'x-console-token': token } : {} });
+    if (res.status === 401 || res.status === 403) { authRequired = true; return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    authRequired = false;
+  } catch (e) {
+    // 网络层失败（桥接没起来）：不当作需要令牌，交给 load() 去报错，避免误显示登录卡片
+    authRequired = false;
+  }
+}
 
 function setMsg(text, cls) {
   const el = $('msg');
@@ -499,8 +516,11 @@ async function load() {
     render();
     if (!setMsg.lastErr) setMsg('');
   } catch (e) {
-    $('authCard').classList.remove('hidden');
-    $('main').classList.add('hidden');
+    if (authRequired) {
+      // 确实需要令牌（或令牌不对）→ 回到登录卡片
+      $('authCard').classList.remove('hidden');
+      $('main').classList.add('hidden');
+    }
     setMsg('加载失败：' + e.message, 'err');
   }
 }
@@ -692,8 +712,20 @@ $('saveBtn').addEventListener('click', async () => {
 window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
 (async () => {
-  if (token) { $('token').value = token; await load(); }
-  else { $('tokenSrc').textContent = ''; setMsg('请填入控制台令牌'); }
+  try { $('token').value = token; } catch {}
+  await probeAuth();
+  if (authRequired) {
+    // 服务端要令牌：显示登录卡片。已有令牌时直接尝试加载。
+    $('authCard').classList.remove('hidden');
+    $('main').classList.add('hidden');
+    if (token) await load();
+    else setMsg('请填入控制台令牌后点「加载」');
+  } else {
+    // 服务端已关闭鉴权（或未配置令牌）：直接进面板
+    $('authCard').classList.add('hidden');
+    $('main').classList.remove('hidden');
+    await load();
+  }
 })();
 </script>
 </body>
