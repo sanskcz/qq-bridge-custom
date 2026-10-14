@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QQ 聊天开关 · qq-bridge</title>
+<style>
+  :root{
+    --bg:#0f1216; --card:#171b21; --card2:#1d222a; --line:#272d36;
+    --fg:#e8edf4; --dim:#8b96a5; --acc:#4c8dff; --ok:#35c07a; --warn:#e0a33a; --bad:#e05c5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:28px 20px 120px}
+  h1{margin:0 0 4px;font-size:20px;font-weight:600}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .card h2{margin:0 0 12px;font-size:14px;font-weight:600;color:var(--dim);
+           text-transform:uppercase;letter-spacing:.04em}
+  .row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:none}
+  .row .id{color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums}
+  .row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .noid{flex:1;color:var(--warn);font-size:13px}
+  .tag{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .tag.on{color:var(--ok);border-color:#1d4a33;background:#12291f}
+  .tag.off{color:var(--dim)}
+  /* 开关 */
+  .sw{position:relative;flex:0 0 auto;width:46px;height:26px;border-radius:999px;
+      background:#2a3038;border:1px solid var(--line);cursor:pointer;transition:background .15s}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+             background:#8b96a5;transition:transform .15s,background .15s}
+  .sw[aria-checked="true"]{background:#1d3f6b;border-color:#2a5fa8}
+  .sw[aria-checked="true"]::after{transform:translateX(20px);background:var(--acc)}
+  input[type=text],input[type=password]{width:100%;padding:9px 11px;border-radius:8px;
+      border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit}
+  button{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card2);
+      color:var(--fg);font:inherit;cursor:pointer}
+  button:hover{border-color:#3a4652}
+  button.primary{background:var(--acc);border-color:var(--acc);color:#08111f;font-weight:600}
+  .bar{position:fixed;left:0;right:0;bottom:0;padding:14px 20px;background:#12161c;
+       border-top:1px solid var(--line);display:flex;gap:12px;align-items:center;justify-content:center}
+  .bar .msg{color:var(--dim);font-size:13px}
+  .hint{color:var(--dim);font-size:12px;margin-top:8px}
+  .err{color:var(--bad)}
+  .ok{color:var(--ok)}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>QQ 聊天开关</h1>
+  <div class="sub">控制它能在哪些群、跟谁聊天。<b>改完立即生效，不需要重启桥接。</b></div>
+
+  <!-- 令牌 -->
+  <div class="card" id="authCard">
+    <h2>控制台令牌</h2>
+    <input type="password" id="token" placeholder="粘贴 state/console-token 的内容" autocomplete="off">
+    <div class="hint">
+      令牌文件：<code>C:\qq-bridge\state\console-token</code>
+      <span id="tokenSrc"></span>
+    </div>
+    <div style="margin-top:12px"><button class="primary" id="loginBtn">加载</button>
+      <span class="msg" id="loginMsg"></span></div>
+  </div>
+
+  <div id="main" class="hidden">
+    <!-- 模型与推理等级 -->
+    <div class="card">
+      <h2>模型与推理等级</h2>
+      <div class="row">
+        <div class="name">启用模型与推理等级选择</div>
+        <span class="tag" id="msTag"></span>
+        <div class="sw" id="msEnabled" role="switch" tabindex="0"></div>
+      </div>
+      <div class="hint">
+        关闭时下面两项<b>不生效也不写入</b>；打开并点「保存并生效」后，
+        它会在<b>下一条消息</b>时对所有会话重新应用（不需要重启桥接或 DSH）。
+      </div>
+      <div id="msFields" style="margin-top:14px;opacity:.45;pointer-events:none">
+        <div style="margin-bottom:12px">
+          <div class="hint" style="margin:0 0 6px">模型</div>
+          <select id="msModel" style="width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></select>
+          <div class="hint" id="msModelDesc"></div>
+        </div>
+        <div>
+          <div class="hint" style="margin:0 0 6px">推理等级</div>
+          <div id="msEffort" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          <div class="hint" id="msEffortDesc"></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px;color:var(--warn)">
+        ⚠️ 注意：DSH 的 selectModel 会同时改全局默认，所以这里改了模型，
+        <b>Web GUI 新会话的默认模型也会跟着变</b>。改之前请知悉。
+      </div>
+    </div>
+
+    <!-- 预警（配额） -->
+    <div class="card">
+      <h2>危机预警</h2>
+      <div class="row">
+        <div class="name">启用预警与限额</div>
+        <span class="tag" id="qTag"></span>
+        <div class="sw" id="qEnabled" role="switch" tabindex="0"></div>
+      </div>
+      <div class="hint" id="qToday"></div>
+      <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        <label class="hint">群聊预警点<input id="qGroupWarn" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+        <label class="hint">群聊每日上限<input id="qGroupLimit" type="number" min="1" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+        <label class="hint">私聊预警点<input id="qPrivWarn" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+        <label class="hint">私聊每日上限<input id="qPrivLimit" type="number" min="1" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+      </div>
+      <div style="margin-top:10px">
+        <label class="hint">豁免的号（不计数、不预警，多个用逗号分隔）
+          <input id="qExempt" type="text" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+        <label class="hint" style="display:block;margin-top:10px">预警时附带的文案
+          <input id="qText" type="text" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+      </div>
+      <div style="margin-top:14px">
+        <div class="hint" style="margin:0 0 6px">预警配图（到预警点时会连同文案一起发出去）</div>
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <img id="qImg" alt="预警配图" style="max-width:150px;max-height:150px;border-radius:8px;border:1px solid var(--line);background:var(--card2)">
+          <div style="flex:1;min-width:200px">
+            <input id="qFile" type="file" accept="image/*" style="display:none">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button id="qPick">选择图片…</button>
+              <button id="qReset">恢复默认图</button>
+            </div>
+            <div class="hint" id="qImgInfo" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px"><button class="primary" id="qSave">保存预警设置</button></div>
+    </div>
+
+    <!-- 人设 -->
+    <div class="card">
+      <h2>人设设定</h2>
+      <div class="row">
+        <div class="name">启用人设（优先生效）</div>
+        <span class="tag" id="psTag"></span>
+        <div class="sw" id="psEnabled" role="switch" tabindex="0"></div>
+      </div>
+      <div class="hint">
+        保存后<b>下一条消息即生效</b>，不用重启。只改「语气与说话方式」——
+        <b>安全规则不受这里影响</b>，包含改写规则意图的内容会被拒绝保存。
+      </div>
+      <div id="psFields" style="margin-top:14px"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="primary" id="psSave">保存人设</button>
+        <button id="psReload">放弃修改</button>
+      </div>
+    </div>
+
+    <!-- 会话模式 -->
+    <div class="card">
+      <h2>会话模式</h2>
+      <div class="row">
+        <div class="name" id="smName">—</div>
+        <span class="tag" id="smTag"></span>
+      </div>
+      <div class="hint" id="smDesc"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="smShared">共享会话（跨群连续记忆）</button>
+        <button id="smPer">按会话分开（各自独立）</button>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        <b>共享</b>：4 个群 + 私聊共用一段上下文，它记得在任何群说过什么、不会重复发言，token 最省；
+        代价是各群记忆合并，且同一时刻只能处理一处（多群同时叫它会排队）。
+        <br><b>分开</b>：每个群上下文独立、互不干扰，但它在 A 群不会自动记得 B 群聊过什么。
+        <br>二者都可以配合跨群读取与 <code>qq_send_forward</code> 转发使用。改完立即生效。
+      </div>
+    </div>
+
+    <!-- 私聊 -->
+    <div class="card">
+      <h2>私聊</h2>
+      <div class="row">
+        <div class="name">任何人都可以私聊它</div>
+        <span class="tag" id="dmTag"></span>
+        <div class="sw" id="dmAll" role="switch" tabindex="0"></div>
+      </div>
+      <div class="hint">
+        开启后，<b>任何人</b>加它好友都能聊天（用的是你的额度）。关闭后只允许下面列出的号。
+        你自己的号 <code id="ownerShow">—</code> 始终不受每日额度限制。
+      </div>
+      <div style="margin-top:12px">
+        <input type="text" id="dmInput" placeholder="要额外允许的 QQ 号，多个用逗号/空格分隔">
+      </div>
+    </div>
+
+    <!-- 群聊 -->
+    <div class="card">
+      <h2>群聊</h2>
+      <div id="groups"></div>
+      <div class="hint">
+        「未允许」的群它完全不会响应（连会话都不会建）。列表是<b>它当前所在的所有群</b>，
+        所以新加的群会自动出现在这里，直接打开开关即可。
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <input type="text" id="groupInput" placeholder="手动添加群号（不在列表里时用）" style="flex:1;min-width:220px">
+        <button id="addGroupBtn">添加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
+  <button class="primary" id="saveBtn" disabled>保存并生效</button>
+  <button id="reloadBtn">重新加载</button>
+  <span class="msg" id="msg"></span>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const qsToken = new URLSearchParams(location.search).get('token');
+let token = qsToken || localStorage.getItem('dsh-qq-console-token') || '';
+let state = null;   // { allow, deny, ownerQQ, groups:[{id,name}] }
+let dirty = false;
+
+function setMsg(text, cls) {
+  const el = $('msg');
+  el.textContent = text || '';
+  el.className = 'msg ' + (cls || '');
+}
+function markDirty() { dirty = true; $('saveBtn').disabled = false; setMsg('有未保存的修改', ''); }
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'x-console-token': token, 'content-type': 'application/json', ...(opts.headers || {}) }
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || ('HTTP ' + res.status));
+  return data;
+}
+
+function normalizeIds(str) {
+  return String(str || '').split(/[\s,，、]+/).map((s) => s.trim())
+    .filter((s) => /^\d+$/.test(s)).map(Number);
+}
+
+function isGroupAllowed(id) {
+  return (state.allow.groups || []).map(String).includes(String(id));
+}
+function isPrivateAllowed(id) {
+  return (state.allow.private || []).map(String).includes(String(id));
+}
+
+function render() {
+  // 私聊
+  const dmAll = state.allowAllWhenEmpty === true;
+  $('dmAll').setAttribute('aria-checked', String(dmAll));
+  $('dmTag').textContent = dmAll ? '对所有人开放' : ('仅 ' + (state.allow.private.length || 0) + ' 个号');
+  $('dmTag').className = 'tag ' + (dmAll ? 'on' : 'off');
+  $('ownerShow').textContent = state.ownerQQ ?? '未设置';
+
+  // 群
+  const box = $('groups');
+  box.innerHTML = '';
+  const groups = state.groups.slice().sort((a, b) => Number(isGroupAllowed(b.id)) - Number(isGroupAllowed(a.id)));
+  let unknownCount = 0;
+  for (const g of groups) {
+    const allowed = isGroupAllowed(g.id);
+    if (g.name === null) unknownCount++;
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const name = document.createElement('div');
+    if (g.name === null) {
+      name.className = 'noid';
+      name.textContent = '群 ' + g.id;
+      name.title = '已允许，但机器人不在这个群里（拉它进去才会生效）';
+    } else {
+      name.className = 'name';
+      name.textContent = g.name;
+      name.title = g.name;
+    }
+
+    const id = document.createElement('div');
+    id.className = 'id';
+    id.textContent = g.id;
+
+    const tag = document.createElement('span');
+    tag.className = 'tag ' + (allowed ? 'on' : 'off');
+    tag.textContent = allowed ? '允许聊天' : '未允许';
+
+    const sw = document.createElement('div');
+    sw.className = 'sw';
+    sw.setAttribute('role', 'switch');
+    sw.setAttribute('tabindex', '0');
+    sw.setAttribute('aria-checked', String(allowed));
+    sw.setAttribute('aria-label', (g.name || g.id) + ' 允许聊天');
+    const toggle = () => {
+      const now = isGroupAllowed(g.id);
+      let list = (state.allow.groups || []).map(String);
+      if (now) list = list.filter((x) => x !== String(g.id));
+      else list.push(String(g.id));
+      state.allow.groups = list.map(Number);
+      markDirty();
+      render();
+    };
+    sw.addEventListener('click', toggle);
+    sw.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); }
+    });
+
+    row.append(name, id, tag, sw);
+    box.appendChild(row);
+  }
+  if (!groups.length) box.innerHTML = '<div class="hint">没有群。</div>';
+  renderModelSelection();
+  renderSessionMode();
+  renderPersona();
+  if (unknownCount) {
+    const tip = document.createElement('div');
+    tip.className = 'hint';
+    tip.textContent = `其中 ${unknownCount} 个群它当前不在里面（已允许但不会响应，除非把它拉进去）。`;
+    box.appendChild(tip);
+  }
+}
+
+// ── 模型与推理等级（本机新增）──
+const MS = { enabled: false, model: '', effort: '', options: [], optionsLabels: {}, models: [] };
+
+async function loadModelSelection() {
+  try {
+    const sel = await api('/api/dsh/model-selection');
+    MS.enabled = sel.enabled === true;
+    MS.model = sel.model || '';
+    MS.effort = sel.reasoningEffort || '';
+    MS.options = Array.isArray(sel.options) ? sel.options : [];
+  } catch (e) { /* 端点不存在时保持默认，页面照常可用 */ }
+  try {
+    const m = await api('/api/dsh/model');
+    MS.models = Array.isArray(m.models) ? m.models : [];
+    MS.optionsLabels = m.labels || {};
+    if (!MS.options.length && Array.isArray(m.options)) MS.options = m.options;
+  } catch (e) {}
+  // 当前模型不一定在清单里（DSH 未连时清单为空），补进去避免下拉为空
+  if (MS.model && !MS.models.some((x) => x.id === MS.model)) {
+    MS.models = [{ id: MS.model, name: MS.model, description: '' }, ...MS.models];
+  }
+}
+
+function renderModelSelection() {
+  $('msEnabled').setAttribute('aria-checked', String(MS.enabled));
+  $('msTag').textContent = MS.enabled ? '已启用' : '未启用';
+  $('msTag').className = 'tag ' + (MS.enabled ? 'on' : 'off');
+  $('msFields').style.opacity = MS.enabled ? '1' : '.45';
+  $('msFields').style.pointerEvents = MS.enabled ? '' : 'none';
+
+  const sel = $('msModel');
+  sel.innerHTML = '';
+  for (const m of MS.models) {
+    const o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = m.name && m.name !== m.id ? (m.name + '（' + m.id + '）') : m.id;
+    if (m.id === MS.model) o.selected = true;
+    sel.appendChild(o);
+  }
+  const cur = MS.models.find((x) => x.id === MS.model);
+  $('msModelDesc').textContent = cur?.description || '';
+
+  const box = $('msEffort');
+  box.innerHTML = '';
+  for (const id of MS.options) {
+    const lab = MS.optionsLabels?.[id] ?? {};
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = lab.name ? (lab.name + '（' + id + '）') : id;
+    btn.dataset.effort = id;
+    btn.className = id === MS.effort ? 'primary' : '';
+    btn.addEventListener('click', () => { MS.effort = id; markDirty(); renderModelSelection(); });
+    box.appendChild(btn);
+  }
+  const elab = MS.optionsLabels?.[MS.effort] ?? {};
+  $('msEffortDesc').textContent = elab.description || '';
+}
+
+// ── 会话模式（本机新增）──
+const SM = { mode: 'per-conversation' };
+async function loadSessionMode() {
+  try {
+    const r = await api('/api/config/session-mode');
+    SM.mode = r.sessionMode === 'shared' ? 'shared' : 'per-conversation';
+  } catch (e) { /* 端点不存在时保持默认 */ }
+}
+function renderSessionMode() {
+  const shared = SM.mode === 'shared';
+  $('smName').textContent = shared ? '共享会话' : '按会话分开';
+  $('smTag').textContent = shared ? '跨群连续记忆' : '各自独立';
+  $('smTag').className = 'tag ' + (shared ? 'on' : 'off');
+  $('smShared').className = shared ? 'primary' : '';
+  $('smPer').className = shared ? '' : 'primary';
+}
+
+// ── 人设（本机新增）──
+const PS = { enabled: false, fields: [], values: {} };
+async function loadPersona() {
+  try {
+    const r = await api('/api/config/persona');
+    PS.enabled = r.persona?.enabled === true;
+    PS.fields = Array.isArray(r.fields) ? r.fields : [];
+    PS.values = {};
+    for (const f of PS.fields) PS.values[f.key] = r.persona?.[f.key] ?? "";
+  } catch (e) { /* 端点不存在时静默 */ }
+}
+function renderPersona() {
+  $('psEnabled').setAttribute('aria-checked', String(PS.enabled));
+  $('psTag').textContent = PS.enabled ? '已启用' : '未启用';
+  $('psTag').className = 'tag ' + (PS.enabled ? 'on' : 'off');
+  const box = $('psFields');
+  box.innerHTML = "";
+  for (const f of PS.fields) {
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = "10px";
+    const lab = document.createElement('div');
+    lab.className = "hint";
+    lab.style.margin = "0 0 4px";
+    lab.textContent = f.label;
+    const ta = document.createElement('textarea');
+    ta.dataset.key = f.key;
+    ta.value = PS.values[f.key] ?? "";
+    ta.rows = f.key === 'name' ? 1 : (f.key === 'tone' ? 2 : 3);
+    ta.style.cssText = "width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit;resize:vertical";
+    wrap.append(lab, ta);
+    box.appendChild(wrap);
+  }
+}
+
+// ── 危机预警（本机新增）──
+const Q = { cfg: null, imgPath: null };
+function qNum(id) { return Number(document.getElementById(id).value); }
+async function loadQuota() {
+  try {
+    const r = await api('/api/config/quota');
+    Q.cfg = r;
+    $('qEnabled').setAttribute('aria-checked', String(r.enabled !== false));
+    $('qTag').textContent = r.enabled !== false ? '已启用' : '未启用';
+    $('qTag').className = 'tag ' + (r.enabled !== false ? 'on' : 'off');
+    $('qGroupWarn').value = r.groupWarnAt;
+    $('qGroupLimit').value = r.groupLimit;
+    $('qPrivWarn').value = r.privateWarnAt;
+    $('qPrivLimit').value = r.privateLimit;
+    $('qExempt').value = (r.exemptOwners || []).join(', ');
+    $('qText').value = r.warnText || '';
+    $('qToday').textContent = '今日已发：群聊 ' + (r.todayGroup ?? 0) + ' 条，私聊 ' + (r.todayPrivate ?? 0) + ' 条';
+    Q.imgPath = r.effectiveImage || r.imageConfigValue || null;
+    const img = $('qImg');
+    if (Q.imgPath) {
+      img.src = '/' + Q.imgPath + '?t=' + Date.now();
+      img.style.display = '';
+      $('qImgInfo').textContent = Q.imgPath
+        + (r.imageConfigValue ? '' : '（默认图）')
+        + (r.image ? '（' + Math.round(r.image.bytes / 1024) + ' KB）' : '');
+    } else {
+      img.style.display = 'none';
+      $('qImgInfo').textContent = '未设置配图（预警时只发文案）';
+    }
+  } catch (e) { /* 端点不存在时静默 */ }
+}
+
+async function load() {
+  setMsg('加载中…');
+  try {
+    const wl = await api('/api/whitelist');
+    let groupList = [];
+    try {
+      const g = await api('/api/qq/groups');
+      groupList = (g.groups || []).map((x) => ({ id: String(x.id), name: x.name ?? null }));
+    } catch (e) {
+      // 拿不到群列表（SnowLuma 未连）时，至少把已允许的群显示出来
+      groupList = (wl.allow?.groups || []).map((id) => ({ id: String(id), name: null }));
+      setMsg('群列表读取失败（SnowLuma 未连接？）—— 只显示已允许的群', 'err');
+    }
+    const known = new Set(groupList.map((g) => g.id));
+    for (const id of (wl.allow?.groups || [])) {
+      if (!known.has(String(id))) groupList.push({ id: String(id), name: null });
+    }
+    state = {
+      allow: { private: (wl.allow?.private || []).map(Number), groups: (wl.allow?.groups || []).map(Number) },
+      deny: { private: (wl.deny?.private || []).map(Number), groups: (wl.deny?.groups || []).map(Number) },
+      ownerQQ: wl.ownerQQ,
+      allowAllWhenEmpty: await fetchDmAll(),
+      groups: groupList
+    };
+    await loadModelSelection();
+    await loadSessionMode();
+    await loadPersona();
+    await loadQuota();
+    $('authCard').classList.add('hidden');
+    $('main').classList.remove('hidden');
+    dirty = false;
+    $('saveBtn').disabled = true;
+    render();
+    if (!setMsg.lastErr) setMsg('');
+  } catch (e) {
+    $('authCard').classList.remove('hidden');
+    $('main').classList.add('hidden');
+    setMsg('加载失败：' + e.message, 'err');
+  }
+}
+
+// allowAllWhenEmpty 不在 /api/whitelist 的返回里，用专用只读端点取。
+async function fetchDmAll() {
+  try {
+    const s = await api('/api/config/allow-all-when-empty');
+    if (typeof s.allowAllWhenEmpty === 'boolean') return s.allowAllWhenEmpty;
+  } catch {}
+  return state?.allowAllWhenEmpty === true;
+}
+
+$('loginBtn').addEventListener('click', () => {
+  token = $('token').value.trim();
+  if (!token) { setMsg('请先填令牌', 'err'); return; }
+  localStorage.setItem('dsh-qq-console-token', token);
+  load();
+});
+$('reloadBtn').addEventListener('click', () => { if (dirty && !confirm('有未保存的修改，确定放弃？')) return; load(); });
+
+$('msEnabled').addEventListener('click', () => {
+  MS.enabled = !MS.enabled;
+  markDirty();
+  renderModelSelection();
+});
+$('msModel').addEventListener('change', (e) => { MS.model = e.target.value; markDirty(); renderModelSelection(); });
+
+async function switchSessionMode(mode) {
+  if (SM.mode === mode) return;
+  setMsg('切换会话模式中…');
+  try {
+    await api('/api/config/session-mode', { method: 'POST', body: JSON.stringify({ sessionMode: mode }) });
+    SM.mode = mode;
+    renderSessionMode();
+    setMsg('会话模式已切换为「' + (mode === 'shared' ? '共享会话' : '按会话分开') + '」，下一次发言时生效', 'ok');
+  } catch (e) {
+    setMsg('切换失败：' + e.message, 'err');
+  }
+}
+$('smShared').addEventListener('click', () => switchSessionMode('shared'));
+$('smPer').addEventListener('click', () => switchSessionMode('per-conversation'));
+
+$('psEnabled').addEventListener('click', () => { PS.enabled = !PS.enabled; renderPersona(); });
+$('psSave').addEventListener('click', async () => {
+  const payload = { enabled: PS.enabled };
+  for (const ta of document.querySelectorAll('#psFields textarea')) payload[ta.dataset.key] = ta.value;
+  setMsg('保存人设中…');
+  try {
+    const r = await api('/api/config/persona', { method: 'POST', body: JSON.stringify(payload) });
+    PS.values = {};
+    for (const f of PS.fields) PS.values[f.key] = r.persona?.[f.key] ?? "";
+    PS.enabled = r.persona?.enabled === true;
+    renderPersona();
+    setMsg('人设已保存，下一条消息即生效 ✓', 'ok');
+  } catch (e) {
+    setMsg('保存失败：' + e.message, 'err');
+  }
+});
+$('psReload').addEventListener('click', async () => { await loadPersona(); renderPersona(); setMsg('已放弃修改'); });
+
+$('qEnabled').addEventListener('click', () => {
+  const on = $('qEnabled').getAttribute('aria-checked') === 'true';
+  $('qEnabled').setAttribute('aria-checked', String(!on));
+  $('qTag').textContent = !on ? '已启用' : '未启用';
+  $('qTag').className = 'tag ' + (!on ? 'on' : 'off');
+});
+$('qSave').addEventListener('click', async () => {
+  setMsg('保存预警设置中…');
+  try {
+    const payload = {
+      enabled: $('qEnabled').getAttribute('aria-checked') === 'true',
+      groupWarnAt: qNum('qGroupWarn'), groupLimit: qNum('qGroupLimit'),
+      privateWarnAt: qNum('qPrivWarn'), privateLimit: qNum('qPrivLimit'),
+      exemptOwners: $('qExempt').value.split(/[\s,，、]+/).filter(Boolean),
+      warnText: $('qText').value
+    };
+    await api('/api/config/quota', { method: 'POST', body: JSON.stringify(payload) });
+    await loadQuota();
+    setMsg('预警设置已保存并生效 ✓（无需重启）', 'ok');
+  } catch (e) {
+    setMsg('保存失败：' + e.message, 'err');
+  }
+});
+$('qPick').addEventListener('click', () => $('qFile').click());
+$('qFile').addEventListener('change', async (ev) => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  if (f.size > 5 * 1024 * 1024) { setMsg('图片不能超过 5MB', 'err'); return; }
+  setMsg('上传配图中…');
+  try {
+    const dataUrl = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = () => rej(new Error("读取文件失败"));
+      fr.readAsDataURL(f);
+    });
+    const r = await api('/api/config/quota-image', { method: 'POST', body: JSON.stringify({ data: dataUrl }) });
+    await loadQuota();
+    setMsg('配图已更换为 ' + r.path + ' ✓（下次预警就会用新图）', 'ok');
+  } catch (e) {
+    setMsg('上传失败：' + e.message, 'err');
+  } finally {
+    $('qFile').value = '';
+  }
+});
+$('qReset').addEventListener('click', async () => {
+  if (!confirm('恢复成默认配图（assets/feed-me.jpg）？')) return;
+  try {
+    const r = await fetch('/api/config/quota-image', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reset: true })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    await loadQuota();
+    setMsg('已恢复默认配图', 'ok');
+  } catch (e) {
+    setMsg('恢复失败：' + e.message, 'err');
+  }
+});
+
+$('dmAll').addEventListener('click', () => {
+  state.allowAllWhenEmpty = !state.allowAllWhenEmpty;
+  markDirty();
+  render();
+});
+
+$('addGroupBtn').addEventListener('click', () => {
+  const ids = normalizeIds($('groupInput').value);
+  if (!ids.length) { setMsg('群号必须是数字', 'err'); return; }
+  const have = new Set(state.allow.groups.map(String));
+  const list = state.groups.slice();
+  for (const id of ids) {
+    if (!have.has(String(id))) state.allow.groups.push(id);
+    if (!list.some((g) => g.id === String(id))) list.push({ id: String(id), name: null });
+  }
+  state.groups = list;
+  $('groupInput').value = '';
+  markDirty();
+  render();
+});
+
+$('saveBtn').addEventListener('click', async () => {
+  setMsg('保存中…');
+  try {
+    // 1) 白名单（走控制台既有端点）
+    await api('/api/whitelist', {
+      method: 'POST',
+      body: JSON.stringify({
+        allow: { private: state.allow.private, groups: state.allow.groups.map(Number) },
+        deny: state.deny,
+        ownerQQ: state.ownerQQ
+      })
+    });
+    // 2) 私聊总开关（按需改 config.json）
+    const extraInput = normalizeIds($('dmInput').value);
+    if (extraInput.length) {
+      const merged = [...new Set([...state.allow.private, ...extraInput])];
+      await api('/api/whitelist', {
+        method: 'POST',
+        body: JSON.stringify({ allow: { private: merged, groups: state.allow.groups.map(Number) }, deny: state.deny, ownerQQ: state.ownerQQ })
+      });
+      $('dmInput').value = '';
+    }
+    // 模型与推理等级：仅在开关打开时提交
+    if (MS.enabled && MS.model && MS.effort) {
+      await api('/api/dsh/model-selection', {
+        method: 'POST',
+        body: JSON.stringify({ enabled: true, model: MS.model, reasoningEffort: MS.effort })
+      });
+    } else if (!MS.enabled) {
+      await api('/api/dsh/model-selection', { method: 'POST', body: JSON.stringify({ enabled: false }) });
+    }
+    await api('/api/config/allow-all-when-empty', {
+      method: 'POST',
+      body: JSON.stringify({ value: state.allowAllWhenEmpty === true })
+    });
+    dirty = false;
+    $('saveBtn').disabled = true;
+    setMsg('已保存并生效 ✓', 'ok');
+    await load();
+    setMsg('已保存并生效 ✓（无需重启）', 'ok');
+  } catch (e) {
+    setMsg('保存失败：' + e.message, 'err');
+  }
+});
+
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+(async () => {
+  if (token) { $('token').value = token; await load(); }
+  else { $('tokenSrc').textContent = ''; setMsg('请填入控制台令牌'); }
+})();
+</script>
+</body>
+</html>
