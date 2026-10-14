@@ -202,6 +202,33 @@ npm install        # 安装依赖（postinstall 会自动修补 @snowluma/sdk �
 > ⚠️ **`socialV2.crossGroup` 涉及隐私**：开启后 A 群的发言可能被转发到 B 群，
 > 而 A 群成员看不到。请自行判断是否合适、是否需要告知群友。
 
+#### 会话活跃度与发送节奏
+
+这两组只影响 **reserved2（二代仿真）** 模式，都能在控制台里改（**改完立即写入，活跃度对下一次唤醒生效**）。
+
+| 字段 | 说明 | 默认 |
+| --- | --- | --- |
+| `socialV2.wake.sleepMinMs` / `.sleepMaxMs` | AI 自愿潜水的最短/最长时长。**`sleepMaxMs = 0 表示不限制**；设了会硬截断它自己定的睡眠 | `60000` / `0` |
+| `socialV2.wake.recommendedSleepMinMs` / `.recommendedSleepMaxMs` | AI 没有指定睡多久时使用的推荐范围 | `300000` / `7200000` |
+| `socialV2.wake.maxWakePerHour` / `.maxWakePerMinute` | **硬上限**：每小时/每分钟最多被唤醒几次（防刷屏也防烧钱） | `12` / `1` |
+| `socialV2.wake.preSleepWaitMs` | 决定潜水前必须先观察多久没人说话 | `300000` |
+| `socialV2.wake.batchWindowMs` | 这几毫秒内的多条消息合并成一次唤醒 | `8000` |
+| `socialV2.send.burstEnabled` | 是否允许一次发多条 | `true` |
+| `socialV2.send.burstIntervalMinMs` / `.burstIntervalMaxMs` | 连发时两条之间的随机间隔 | `1000` / `3000` |
+| `socialV2.send.gapBaseMs` / `.gapPerCharMs` | 按字数计算间隔：基础值 + 每字追加 | `800` / `20` |
+| `socialV2.send.maxSendPerHour` / `.maxSendPerMinute` | 发送条数硬上限 | `60` / `8` |
+| `socialV2.send.maxMessageChars` | 单条消息最大字数 | `500` |
+| `socialV2.autoReplyCheckMs` | 多久检查一次有没有该回的消息 | `30000` |
+
+> 控制台里这些用**分钟/秒**输入（比毫秒直观），保存时自动换算。
+> 界面上还带了「安静一点 / 活跃一点 / 恢复默认」三个预设，以及改「最长潜水」时自动收敛「推荐值」的逻辑 ——
+> 避免改一个字段被另一个字段的关联约束卡住。
+
+> ⚠️ **`socialV2.sessionMode` 的 `shared` 暂不可用**：该模式的实现存在缺陷
+> （会话回收会误删共享映射，导致所有会话反复重建、日志每 3 秒刷一轮）。
+> 服务端与界面都已禁用该选项，当前只支持 `per-conversation`。
+> 详见 [MODIFICATIONS.md](MODIFICATIONS.md)。
+
 ### DSH 端安装（必做：装 preset + 挂 MCP）
 
 桥接和控制台能跑起来还不够，DSH 端还需要安装两个聊天 preset（`qq-chat` / `qq-chat-v2`）并挂载 MCP。**单机新装同样必须执行这一步**（不是只有「另一台设备」才需要），装完还要**重启 DSH**：

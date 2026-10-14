@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="page-build" content="PAGE_BUILD_PLACEHOLDER">
 <title>QQ 聊天开关 · qq-bridge</title>
 <style>
   :root{
@@ -131,7 +132,61 @@
           </div>
         </div>
       </div>
+      <div id="qWarn" class="hint" style="margin-top:12px;display:none;color:var(--bad);font-weight:600"></div>
       <div style="margin-top:12px"><button class="primary" id="qSave">保存预警设置</button></div>
+    </div>
+
+    <!-- 会话活跃度 -->
+    <div class="card">
+      <h2>会话活跃度</h2>
+      <div class="hint">
+        控制它<b>多久说一次话</b>、<b>能睡多久</b>、<b>多久能被叫醒</b>。
+        只作用于二代仿真模式；<b>只对新设置的下一次唤醒生效</b>（它睡觉前会自己定下一次条件）。
+      </div>
+      <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        <label class="hint">最短潜水（分钟）<input id="actSleepMin" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">它自己定的睡眠不会短于这个</span></label>
+        <label class="hint">最长潜水（分钟）<input id="actSleepMax" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75"><b>0 = 不限制</b>；设了会硬截断它的睡眠</span></label>
+        <label class="hint">推荐最短（分钟）<input id="actRecMin" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">它没说睡多久时用这个范围</span></label>
+        <label class="hint">推荐最长（分钟）<input id="actRecMax" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+      </div>
+      <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        <label class="hint">每小时最多唤醒<input id="actWakeHour" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">硬上限，防刷屏也防烧钱</span></label>
+        <label class="hint">每分钟最多唤醒<input id="actWakeMin" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+        <label class="hint">睡前观察窗口（分钟）<input id="actPreSleep" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">想潜水前必须先观察这么久没人说话</span></label>
+        <label class="hint">合并唤醒窗口（秒）<input id="actBatch" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">这几秒内的多条消息合并成一次唤醒</span></label>
+      </div>
+      <div id="actWarn" class="hint" style="margin-top:12px;display:none;color:var(--bad);font-weight:600"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="primary" id="actSave">保存活跃度</button>
+        <button id="actPresetQuiet">安静一点</button>
+        <button id="actPresetActive">活跃一点</button>
+        <button id="actPresetDefault">恢复默认</button>
+      </div>
+    </div>
+
+    <!-- 发送节奏 -->
+    <div class="card">
+      <h2>消息发送时间</h2>
+      <div class="hint">控制它<b>打字与发消息的节奏</b>，让人看着不像机器人在刷屏。</div>
+      <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        <label class="hint">连发最短间隔（毫秒）<input id="sndBurstMin" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">一次连发里两条之间的间隔</span></label>
+        <label class="hint">连发最长间隔（毫秒）<input id="sndBurstMax" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+        <label class="hint">基础间隔（毫秒）<input id="sndGapBase" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">按字数算间隔时的基数</span></label>
+        <label class="hint">每字追加（毫秒）<input id="sndGapPerChar" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">字数越多，间隔越长</span></label>
+      </div>
+      <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        <label class="hint">每小时最多发<input id="sndMaxPerHour" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">硬上限</span></label>
+        <label class="hint">每分钟最多发<input id="sndMaxPerMinute" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
+        <label class="hint">单条最大字数<input id="sndMaxChars" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">超了会截断</span></label>
+        <label class="hint">回复检查间隔（秒）<input id="sndReplyCheck" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">多久检查一次有没有该回的消息</span></label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="name">允许多条连发</div>
+        <span class="tag" id="sndBurstTag"></span>
+        <div class="sw" id="sndBurstEnabled" role="switch" tabindex="0"></div>
+      </div>
+      <div id="sndWarn" class="hint" style="margin-top:12px;display:none;color:var(--bad);font-weight:600"></div>
+      <div style="margin-top:12px"><button class="primary" id="sndSave">保存发送节奏</button></div>
     </div>
 
     <!-- 人设 -->
@@ -162,7 +217,7 @@
       </div>
       <div class="hint" id="smDesc"></div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-        <button id="smShared">共享会话（跨群连续记忆）</button>
+        <button id="smShared" disabled title="实现存在缺陷，正在重做，暂不可用">共享会话（暂不可用）</button>
         <button id="smPer">按会话分开（各自独立）</button>
       </div>
       <div class="hint" style="margin-top:10px">
@@ -170,6 +225,7 @@
         代价是各群记忆合并，且同一时刻只能处理一处（多群同时叫它会排队）。
         <br><b>分开</b>：每个群上下文独立、互不干扰，但它在 A 群不会自动记得 B 群聊过什么。
         <br>二者都可以配合跨群读取与 <code>qq_send_forward</code> 转发使用。改完立即生效。
+        <br><b style="color:var(--warn)">⚠️ 共享会话模式暂不可用</b>：实现存在缺陷会导致会话反复重建，正在重做。
       </div>
     </div>
 
@@ -408,6 +464,9 @@ async function loadSessionMode() {
 }
 function renderSessionMode() {
   const shared = SM.mode === 'shared';
+  // 共享模式已停用：按钮常驻禁用，避免用户点了必然失败
+  const btnShared = $('smShared');
+  if (btnShared) { btnShared.disabled = true; btnShared.textContent = '共享会话（暂不可用）'; }
   $('smName').textContent = shared ? '共享会话' : '按会话分开';
   $('smTag').textContent = shared ? '跨群连续记忆' : '各自独立';
   $('smTag').className = 'tag ' + (shared ? 'on' : 'off');
@@ -452,6 +511,54 @@ function renderPersona() {
 // ── 危机预警（本机新增）──
 const Q = { cfg: null, imgPath: null };
 function qNum(id) { return Number(document.getElementById(id).value); }
+
+/** 校验四个数字框与两个关系约束，返回 {ok, errors:{字段:原因}}。 */
+function validateQuota() {
+  const errors = {};
+  const read = (id, label, min) => {
+    const el = document.getElementById(id);
+    const raw = String(el.value ?? '').trim();
+    if (raw === '') { errors[id] = label + '不能留空'; return null; }
+    const v = Number(raw);
+    if (!Number.isFinite(v)) { errors[id] = label + '必须是数字'; return null; }
+    if (!Number.isInteger(v)) { errors[id] = label + '必须是整数'; return null; }
+    if (v < min) { errors[id] = label + '不能小于 ' + min; return null; }
+    if (v > 10000) { errors[id] = label + '不能大于 10000'; return null; }
+    return v;
+  };
+  const gw = read('qGroupWarn', '群聊预警点', 0);
+  const gl = read('qGroupLimit', '群聊每日上限', 1);
+  const pw = read('qPrivWarn', '私聊预警点', 0);
+  const pl = read('qPrivLimit', '私聊每日上限', 1);
+  // 关系约束：预警点必须小于上限，否则永远只能触发预警、说不出上限
+  if (gw !== null && gl !== null && gw >= gl) errors.qGroupWarn = '群聊预警点要小于每日上限（' + gl + '）';
+  if (pw !== null && pl !== null && pw >= pl) errors.qPrivWarn = '私聊预警点要小于每日上限（' + pl + '）';
+  return { ok: Object.keys(errors).length === 0, errors };
+}
+
+/** 把校验结果画到界面上：标红 + 顶部提示 + 禁用保存。 */
+function paintQuotaValidation() {
+  const { ok, errors } = validateQuota();
+  for (const id of ['qGroupWarn', 'qGroupLimit', 'qPrivWarn', 'qPrivLimit']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const bad = errors[id];
+    el.style.borderColor = bad ? 'var(--bad)' : 'var(--line)';
+    el.title = bad || '';
+  }
+  const box = document.getElementById('qWarn');
+  if (box) {
+    box.textContent = ok ? '' : '⚠️ ' + Object.values(errors).join('；');
+    box.style.display = ok ? 'none' : '';
+  }
+  const btn = document.getElementById('qSave');
+  if (btn) {
+    btn.disabled = !ok;
+    btn.title = ok ? '' : '请先修正上面标红的问题';
+  }
+  return ok;
+}
+
 async function loadQuota() {
   try {
     const r = await api('/api/config/quota');
@@ -478,7 +585,121 @@ async function loadQuota() {
       img.style.display = 'none';
       $('qImgInfo').textContent = '未设置配图（预警时只发文案）';
     }
+    paintQuotaValidation();   // 加载后按当前值刷新校验状态
   } catch (e) { /* 端点不存在时静默 */ }
+}
+
+// ── 会话活跃度与发送节奏（本机新增）──
+// 界面上用「分钟/秒」输入（比毫秒直观），进出接口时换算成毫秒。
+const ACT = { ms: {}, burst: true };
+const MS_MIN = 60000, MS_SEC = 1000;
+function setNum(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
+function getNum(id) { const el = document.getElementById(id); return el ? String(el.value ?? "").trim() : ""; }
+function asInt(raw, label, min, max, errors, id) {
+  if (raw === "") { errors[id] = label + "不能留空"; return null; }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) { errors[id] = label + "必须是数字"; return null; }
+  if (!Number.isInteger(n)) { errors[id] = label + "必须是整数"; return null; }
+  if (n < min || n > max) { errors[id] = label + "必须在 " + min + "~" + max + " 之间"; return null; }
+  return n;
+}
+/** 校验活跃度，返回 {ok, errors, payload}。 */
+function validateActivity() {
+  const e = {};
+  const sleepMin = asInt(getNum("actSleepMin"), "最短潜水", 0, 1440, e, "actSleepMin");
+  const sleepMax = asInt(getNum("actSleepMax"), "最长潜水", 0, 1440, e, "actSleepMax");
+  const recMin = asInt(getNum("actRecMin"), "推荐最短", 0, 1440, e, "actRecMin");
+  const recMax = asInt(getNum("actRecMax"), "推荐最长", 0, 1440, e, "actRecMax");
+  const wakeHour = asInt(getNum("actWakeHour"), "每小时最多唤醒", 0, 1000, e, "actWakeHour");
+  const wakeMin = asInt(getNum("actWakeMin"), "每分钟最多唤醒", 0, 100, e, "actWakeMin");
+  const preSleep = asInt(getNum("actPreSleep"), "睡前观察窗口", 0, 60, e, "actPreSleep");
+  const batch = asInt(getNum("actBatch"), "合并唤醒窗口", 1, 600, e, "actBatch");
+  if (sleepMax !== null && sleepMax > 0 && sleepMin !== null && sleepMin > sleepMax) e.actSleepMin = "最短潜水不能大于最长潜水";
+  if (recMin !== null && recMax !== null && recMin > recMax) e.actRecMin = "推荐最短不能大于推荐最长";
+  // 注意：最长潜水 = 0 表示「不限制」，此时推荐值不受它约束，不能拿 0 去比较
+  if (sleepMax !== null && sleepMax > 0 && recMax !== null && recMax > 0 && recMax > sleepMax) e.actRecMax = "推荐最长不能超过最长潜水";
+  const ok = Object.keys(e).length === 0;
+  return { ok, errors: e, payload: ok ? {
+    sleepMinMs: sleepMin * MS_MIN,
+    sleepMaxMs: sleepMax * MS_MIN,
+    recommendedSleepMinMs: recMin * MS_MIN,
+    recommendedSleepMaxMs: recMax * MS_MIN,
+    maxWakePerHour: wakeHour, maxWakePerMinute: wakeMin,
+    preSleepWaitMs: preSleep * MS_MIN,
+    batchWindowMs: batch * MS_SEC
+  } : null };
+}
+function validateSend() {
+  const e = {};
+  const bMin = asInt(getNum("sndBurstMin"), "连发最短间隔", 0, 600000, e, "sndBurstMin");
+  const bMax = asInt(getNum("sndBurstMax"), "连发最长间隔", 0, 600000, e, "sndBurstMax");
+  const gapBase = asInt(getNum("sndGapBase"), "基础间隔", 0, 600000, e, "sndGapBase");
+  const gapChar = asInt(getNum("sndGapPerChar"), "每字追加", 0, 1000, e, "sndGapPerChar");
+  const perHour = asInt(getNum("sndMaxPerHour"), "每小时最多发", 0, 10000, e, "sndMaxPerHour");
+  const perMin = asInt(getNum("sndMaxPerMinute"), "每分钟最多发", 0, 1000, e, "sndMaxPerMinute");
+  const maxChars = asInt(getNum("sndMaxChars"), "单条最大字数", 1, 5000, e, "sndMaxChars");
+  const replyCheck = asInt(getNum("sndReplyCheck"), "回复检查间隔", 1, 600, e, "sndReplyCheck");
+  if (bMin !== null && bMax !== null && bMin > bMax) e.sndBurstMin = "最短间隔不能大于最长间隔";
+  const ok = Object.keys(e).length === 0;
+  return { ok, errors: e, payload: ok ? {
+    burstEnabled: ACT.burst,
+    burstIntervalMinMs: bMin, burstIntervalMaxMs: bMax,
+    gapBaseMs: gapBase, gapPerCharMs: gapChar,
+    maxSendPerHour: perHour, maxSendPerMinute: perMin,
+    maxMessageChars: maxChars,
+    autoReplyCheckMs: replyCheck * MS_SEC
+  } : null };
+}
+function paintValidation(prefix, result) {
+  const ids = prefix === "act"
+    ? ["actSleepMin","actSleepMax","actRecMin","actRecMax","actWakeHour","actWakeMin","actPreSleep","actBatch"]
+    : ["sndBurstMin","sndBurstMax","sndGapBase","sndGapPerChar","sndMaxPerHour","sndMaxPerMinute","sndMaxChars","sndReplyCheck"];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const bad = result.errors[id];
+    el.style.borderColor = bad ? "var(--bad)" : "var(--line)";
+    el.title = bad || "";
+  }
+  const box = document.getElementById(prefix + "Warn");
+  if (box) {
+    box.textContent = result.ok ? "" : "⚠️ " + Object.values(result.errors).join("；");
+    box.style.display = result.ok ? "none" : "";
+  }
+  const btn = document.getElementById(prefix + "Save");
+  if (btn) btn.disabled = !result.ok;
+  return result.ok;
+}
+/** 把服务端返回的毫秒值填进界面（换算成分钟/秒）。 */
+function fillActivity(a) {
+  ACT.ms = a;
+  setNum("actSleepMin", Math.round((a.sleepMinMs ?? 0) / MS_MIN));
+  setNum("actSleepMax", Math.round((a.sleepMaxMs ?? 0) / MS_MIN));
+  setNum("actRecMin", Math.round((a.recommendedSleepMinMs ?? 0) / MS_MIN));
+  setNum("actRecMax", Math.round((a.recommendedSleepMaxMs ?? 0) / MS_MIN));
+  setNum("actWakeHour", a.maxWakePerHour ?? 0);
+  setNum("actWakeMin", a.maxWakePerMinute ?? 0);
+  setNum("actPreSleep", Math.round((a.preSleepWaitMs ?? 0) / MS_MIN));
+  setNum("actBatch", Math.round((a.batchWindowMs ?? 0) / MS_SEC));
+  setNum("sndBurstMin", a.burstIntervalMinMs ?? 0);
+  setNum("sndBurstMax", a.burstIntervalMaxMs ?? 0);
+  setNum("sndGapBase", a.gapBaseMs ?? 0);
+  setNum("sndGapPerChar", a.gapPerCharMs ?? 0);
+  setNum("sndMaxPerHour", a.maxSendPerHour ?? 0);
+  setNum("sndMaxPerMinute", a.maxSendPerMinute ?? 0);
+  setNum("sndMaxChars", a.maxMessageChars ?? 0);
+  setNum("sndReplyCheck", Math.round((a.autoReplyCheckMs ?? 0) / MS_SEC));
+  ACT.burst = a.burstEnabled !== false;
+  const sw = document.getElementById("sndBurstEnabled");
+  if (sw) sw.setAttribute("aria-checked", String(ACT.burst));
+  const tag = document.getElementById("sndBurstTag");
+  if (tag) { tag.textContent = ACT.burst ? "允许" : "禁止"; tag.className = "tag " + (ACT.burst ? "on" : "off"); }
+  paintValidation("act", validateActivity());
+  paintValidation("snd", validateSend());
+}
+async function loadActivity() {
+  try { const r = await api("/api/config/activity"); fillActivity(r.activity || {}); }
+  catch (e) { /* 端点不存在时静默 */ }
 }
 
 async function load() {
@@ -509,6 +730,7 @@ async function load() {
     await loadSessionMode();
     await loadPersona();
     await loadQuota();
+    await loadActivity();
     $('authCard').classList.add('hidden');
     $('main').classList.remove('hidden');
     dirty = false;
@@ -564,6 +786,95 @@ async function switchSessionMode(mode) {
 $('smShared').addEventListener('click', () => switchSessionMode('shared'));
 $('smPer').addEventListener('click', () => switchSessionMode('per-conversation'));
 
+// 活跃度：实时校验 + 保存 + 预设
+/** 自动收敛：避免用户改一个字段就被另一个字段的关联约束卡住。
+ *  改「最长潜水」→ 把「推荐最长」「推荐最短」压进 [最短潜水, 最长潜水]
+ *  改「推荐最长」→ 抬起「最长潜水」以容纳它
+ *  改「推荐最短」→ 不低于「最短潜水」
+ *  最长潜水 = 0 表示不限制，此时不做上限收敛。
+ */
+function reconcileActivity(changedId) {
+  const num = (id) => { const v = String(document.getElementById(id).value ?? "").trim(); return v === "" ? null : Number(v); };
+  const set = (id, v) => { if (Number.isFinite(v) && v >= 0) document.getElementById(id).value = String(Math.round(v)); };
+  const sleepMin = num("actSleepMin"), sleepMax = num("actSleepMax");
+  const recMin = num("actRecMin"), recMax = num("actRecMax");
+  const capped = sleepMax !== null && sleepMax > 0;
+  if (changedId === "actSleepMax" || changedId === "actSleepMin") {
+    if (capped) {
+      if (recMax !== null && recMax > sleepMax) set("actRecMax", sleepMax);
+    }
+    const rm = num("actRecMax");
+    if (rm !== null && recMin !== null && recMin > rm) set("actRecMin", rm);
+    if (sleepMin !== null) {
+      const rmin = num("actRecMin");
+      if (rmin !== null && rmin < sleepMin) set("actRecMin", sleepMin);
+    }
+  } else if (changedId === "actRecMax") {
+    if (capped && recMax !== null && recMax > sleepMax) set("actSleepMax", recMax);
+    const rm = num("actRecMax");
+    if (rm !== null && recMin !== null && recMin > rm) set("actRecMin", rm);
+  } else if (changedId === "actRecMin") {
+    if (sleepMin !== null && recMin !== null && recMin < sleepMin) set("actSleepMin", recMin);
+    if (recMax !== null && recMin !== null && recMin > recMax) set("actRecMax", recMin);
+  }
+}
+for (const id of ['actSleepMin','actSleepMax','actRecMin','actRecMax','actWakeHour','actWakeMin','actPreSleep','actBatch']) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  el.addEventListener('input', () => { reconcileActivity(id); paintValidation('act', validateActivity()); dirty = true; });
+}
+for (const id of ['sndBurstMin','sndBurstMax','sndGapBase','sndGapPerChar','sndMaxPerHour','sndMaxPerMinute','sndMaxChars','sndReplyCheck']) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  el.addEventListener('input', () => { paintValidation('snd', validateSend()); dirty = true; });
+}
+$('sndBurstEnabled').addEventListener('click', () => {
+  ACT.burst = !ACT.burst;
+  $('sndBurstEnabled').setAttribute('aria-checked', String(ACT.burst));
+  $('sndBurstTag').textContent = ACT.burst ? '允许' : '禁止';
+  $('sndBurstTag').className = 'tag ' + (ACT.burst ? 'on' : 'off');
+  dirty = true;
+});
+$('actSave').addEventListener('click', async () => {
+  const v = validateActivity();
+  if (!paintValidation('act', v)) { setMsg('保存失败：' + (Object.values(v.errors)[0] ?? '请检查标红项'), 'err'); return; }
+  setMsg('保存活跃度中…');
+  try {
+    // 只提交本卡片的字段：服务端做部分更新，另一张卡片校验不通过也不该连累这里
+    const r = await api('/api/config/activity', { method: 'POST', body: JSON.stringify(v.payload) });
+    fillActivity(r.activity || {});
+    setMsg('活跃度已保存 ✓（对下一次唤醒生效）', 'ok');
+  } catch (e) { setMsg('保存失败：' + e.message, 'err'); }
+});
+$('sndSave').addEventListener('click', async () => {
+  const v = validateSend();
+  if (!paintValidation('snd', v)) { setMsg('保存失败：' + (Object.values(v.errors)[0] ?? '请检查标红项'), 'err'); return; }
+  setMsg('保存发送节奏中…');
+  try {
+    const r = await api('/api/config/activity', { method: 'POST', body: JSON.stringify(v.payload) });
+    fillActivity(r.activity || {});
+    setMsg('发送节奏已保存 ✓（下一条消息即生效）', 'ok');
+  } catch (e) { setMsg('保存失败：' + e.message, 'err'); }
+});
+// 预设：一键切换活跃程度
+function applyPreset(p) {
+  setNum("actSleepMin", p.sleepMin); setNum("actSleepMax", p.sleepMax);
+  setNum("actRecMin", p.recMin); setNum("actRecMax", p.recMax);
+  setNum("actWakeHour", p.wakeHour); setNum("actWakeMin", p.wakeMin);
+  reconcileActivity("actSleepMax");
+  paintValidation("act", validateActivity());
+  dirty = true;
+  setMsg('已填入「' + p.name + '」预设，点「保存活跃度」生效');
+}
+const ACT_PRESETS = {
+  quiet: { name: '安静', sleepMin: 10, sleepMax: 120, recMin: 20, recMax: 120, wakeHour: 6, wakeMin: 1 },
+  active: { name: '活跃', sleepMin: 1, sleepMax: 20, recMin: 3, recMax: 20, wakeHour: 30, wakeMin: 2 },
+  def: { name: '默认', sleepMin: 1, sleepMax: 0, recMin: 5, recMax: 120, wakeHour: 12, wakeMin: 1 }
+};
+$('actPresetQuiet').addEventListener('click', () => applyPreset(ACT_PRESETS.quiet));
+$('actPresetActive').addEventListener('click', () => applyPreset(ACT_PRESETS.active));
+$('actPresetDefault').addEventListener('click', () => applyPreset(ACT_PRESETS.def));
+
 $('psEnabled').addEventListener('click', () => { PS.enabled = !PS.enabled; renderPersona(); });
 $('psSave').addEventListener('click', async () => {
   const payload = { enabled: PS.enabled };
@@ -588,7 +899,21 @@ $('qEnabled').addEventListener('click', () => {
   $('qTag').textContent = !on ? '已启用' : '未启用';
   $('qTag').className = 'tag ' + (!on ? 'on' : 'off');
 });
+// 四个数字框实时校验：边输入边提示，不必等到点保存才发现问题
+const QUOTA_NUM_IDS = ['qGroupWarn', 'qGroupLimit', 'qPrivWarn', 'qPrivLimit'];
+for (const id of QUOTA_NUM_IDS) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  el.addEventListener('input', () => { paintQuotaValidation(); dirty = true; });
+  el.addEventListener('blur', () => paintQuotaValidation());
+}
+
 $('qSave').addEventListener('click', async () => {
+  // 本地先校验：把问题直接指到具体字段，而不是等服务端返回一句笼统的话
+  if (!paintQuotaValidation()) {    const first = Object.values(validateQuota().errors)[0] ?? '请检查标红的输入框';
+    setMsg('保存失败：' + first, 'err');
+    return;
+  }
   setMsg('保存预警设置中…');
   try {
     const payload = {

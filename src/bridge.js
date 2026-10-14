@@ -3428,9 +3428,19 @@ function personaInjection() {
         }
 
         if (req.method === 'GET' && url.pathname === '/whitelist') {
-          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', ...SECURITY_HEADERS });
+          res.writeHead(200, {
+            ...SECURITY_HEADERS,
+            'content-type': 'text/html; charset=utf-8',
+            // 明确禁缓存：这个页面经常改，加载到旧版本会让人误以为「改了没生效」
+            // 放在 SECURITY_HEADERS 之后，覆盖其中可能已有的同名头
+            'cache-control': 'no-store, must-revalidate'
+          });
           try {
-            res.end(fs.readFileSync(path.join(ROOT, 'public', 'whitelist.html'), 'utf8'));
+            let page = fs.readFileSync(path.join(ROOT, 'public', 'whitelist.html'), 'utf8');
+            // 注入构建指纹（页面内容哈希前 12 位）：排查缓存问题时对照用
+            const build = crypto.createHash('sha256').update(page).digest('hex').slice(0, 12);
+            page = page.replace('PAGE_BUILD_PLACEHOLDER', build);
+            res.end(page);
           } catch {
             res.end('开关页面缺失：qq-bridge/public/whitelist.html');
           }
@@ -3471,6 +3481,120 @@ function personaInjection() {
         // per-conversation = 每个群/私聊各自一个会话（默认，上下文互不干扰）
         // ── 人设（本机新增）：控制台可视化编辑，改完下一条消息即生效 ──
         // ── 预警（配额）设置：条数与配图都可从控制台改 ──
+        // ── 会话活跃度与发送节奏（本机新增）────────────────────────────────
+        // 活跃度 = AI 自愿潜水的时长范围 + 多久能被叫醒；发送节奏 = 条间间隔与连发。
+        // 只影响 reserved2（二代仿真）模式；一代模式用的是另一套 social.* 参数。
+        // 默认值与 bridge.js 内部一致（config 里原本没有 socialV2.wake，靠代码默认）。
+        function activityState() {
+          const w = cfg.socialV2?.wake ?? {};
+          const s = cfg.socialV2?.send ?? {};
+          return {
+            sleepMinMs: w.sleepMinMs ?? 60000,
+            sleepMaxMs: w.sleepMaxMs ?? 0,
+            recommendedSleepMinMs: w.recommendedSleepMinMs ?? 300000,
+            recommendedSleepMaxMs: w.recommendedSleepMaxMs ?? 7200000,
+            maxWakePerHour: w.maxWakePerHour ?? 12,
+            maxWakePerMinute: w.maxWakePerMinute ?? 1,
+            preSleepWaitMs: w.preSleepWaitMs ?? 300000,
+            batchWindowMs: w.batchWindowMs ?? 8000,
+            autoReplyCheckMs: cfg.socialV2?.autoReplyCheckMs ?? 30000,
+            burstEnabled: s.burstEnabled !== false,
+            maxSendPerHour: s.maxSendPerHour ?? 60,
+            maxSendPerMinute: s.maxSendPerMinute ?? 8,
+            burstIntervalMinMs: s.burstIntervalMinMs ?? 1000,
+            burstIntervalMaxMs: s.burstIntervalMaxMs ?? 3000,
+            gapBaseMs: s.gapBaseMs ?? 800,
+            gapPerCharMs: s.gapPerCharMs ?? 20,
+            maxMessageChars: s.maxMessageChars ?? 500
+          };
+        }
+        if (req.method === 'GET' && url.pathname === '/api/config/activity') {
+          sendJson({ ok: true, activity: activityState() });
+          return;
+        }
+        if (req.method === 'POST' && url.pathname === '/api/config/activity') {
+          const body = await readBody();
+          // 部分更新：活跃度卡片与发送节奏卡片各自只提交自己的字段，
+          // 所以这里对「没传的字段」保留现状，而不是要求全量参数。
+          const INT = (min, max, label) => (v) => {
+            if (typeof v === 'boolean') throw new Error(label + ' 必须是数字');
+            const s = String(v).trim();
+            if (s === '') throw new Error(label + ' 不能留空');
+            const n = Number(s);
+            if (!Number.isFinite(n)) throw new Error(label + ' 必须是数字');
+            if (!Number.isInteger(n)) throw new Error(label + ' 必须是整数');
+            if (n < min || n > max) throw new Error(label + ' 必须在 ' + min + '~' + max + ' 之间');
+            return n;
+          };
+          const next = { ...activityState() };
+          const R = {
+            sleepMinMs: INT(0, 86400000, '最短潜水'),
+            sleepMaxMs: INT(0, 86400000, '最长潜水'),
+            recommendedSleepMinMs: INT(1000, 86400000, '推荐最短'),
+            recommendedSleepMaxMs: INT(1000, 86400000, '推荐最长'),
+            maxWakePerHour: INT(0, 1000, '每小时最多唤醒'),
+            maxWakePerMinute: INT(0, 100, '每分钟最多唤醒'),
+            preSleepWaitMs: INT(0, 3600000, '睡前观察窗口'),
+            batchWindowMs: INT(1000, 600000, '合并唤醒窗口'),
+            autoReplyCheckMs: INT(1000, 600000, '回复检查间隔'),
+            maxSendPerHour: INT(0, 10000, '每小时最多发'),
+            maxSendPerMinute: INT(0, 1000, '每分钟最多发'),
+            burstIntervalMinMs: INT(0, 600000, '连发最短间隔'),
+            burstIntervalMaxMs: INT(0, 600000, '连发最长间隔'),
+            gapBaseMs: INT(0, 600000, '基础间隔'),
+            gapPerCharMs: INT(0, 1000, '每字追加'),
+            maxMessageChars: INT(1, 5000, '单条最大字数')
+          };
+          try {
+            for (const [k, fn] of Object.entries(R)) {
+              if (body[k] !== undefined) next[k] = fn(body[k]);
+            }
+            if (body.burstEnabled !== undefined) {
+              if (typeof body.burstEnabled !== 'boolean') throw new Error('连发开关必须是布尔值');
+              next.burstEnabled = body.burstEnabled;
+            }
+            if (next.sleepMaxMs > 0 && next.sleepMinMs > next.sleepMaxMs) throw new Error('最短潜水不能大于最长潜水');
+            if (next.recommendedSleepMinMs > next.recommendedSleepMaxMs) throw new Error('推荐最短不能大于推荐最长');
+            if (next.burstIntervalMinMs > next.burstIntervalMaxMs) throw new Error('连发最短间隔不能大于最长间隔');
+            if (next.sleepMaxMs > 0 && next.recommendedSleepMaxMs > next.sleepMaxMs) throw new Error('推荐最长不能超过最长潜水');
+          } catch (error) {
+            sendJson({ ok: false, error: error?.message ?? String(error) }, 400);
+            return;
+          }
+          try {
+            const configFile = path.join(ROOT, 'config.json');
+            const file = readConfigObject(configFile);
+            const sv2 = { ...(file.socialV2 ?? {}) };
+            sv2.wake = {
+              ...(sv2.wake ?? {}),
+              sleepMinMs: next.sleepMinMs, sleepMaxMs: next.sleepMaxMs,
+              recommendedSleepMinMs: next.recommendedSleepMinMs,
+              recommendedSleepMaxMs: next.recommendedSleepMaxMs,
+              maxWakePerHour: next.maxWakePerHour, maxWakePerMinute: next.maxWakePerMinute,
+              preSleepWaitMs: next.preSleepWaitMs, batchWindowMs: next.batchWindowMs
+            };
+            sv2.send = {
+              ...(sv2.send ?? {}),
+              burstEnabled: next.burstEnabled,
+              maxSendPerHour: next.maxSendPerHour, maxSendPerMinute: next.maxSendPerMinute,
+              burstIntervalMinMs: next.burstIntervalMinMs, burstIntervalMaxMs: next.burstIntervalMaxMs,
+              gapBaseMs: next.gapBaseMs, gapPerCharMs: next.gapPerCharMs,
+              maxMessageChars: next.maxMessageChars
+            };
+            sv2.autoReplyCheckMs = next.autoReplyCheckMs;
+            file.socialV2 = sv2;
+            atomicWriteJson(configFile, file);
+            cfg.socialV2 = sv2;   // 热更新，无需重启
+            log('控制台：活跃度/发送节奏已更新（潜水 ' + Math.round(next.sleepMinMs / 1000) + 's~'
+              + (next.sleepMaxMs ? Math.round(next.sleepMaxMs / 1000) + 's' : '不限')
+              + '，每小时最多唤醒 ' + next.maxWakePerHour + ' 次，每小时最多发 ' + next.maxSendPerHour + ' 条）');
+            sendJson({ ok: true, activity: activityState() });
+          } catch (error) {
+            sendJson({ ok: false, error: '写入失败：' + (error?.message ?? error) }, 500);
+          }
+          return;
+        }
+
         if (req.method === 'GET' && url.pathname === '/api/config/quota') {
           const q = resolveQuotaConfig(cfg, { root: ROOT });
           let imageInfo = null;
@@ -3655,6 +3779,15 @@ function personaInjection() {
         if (req.method === 'POST' && url.pathname === '/api/config/session-mode') {
           const body = await readBody();
           const want = String(body.sessionMode ?? '').trim();
+          // ⚠️ 共享会话模式暂时停用：它的实现存在设计缺陷 ——
+          // retireSession() 会用 sessionKeyFor(key) 取得「所有者」的 sessionId，
+          // 却删除自己这个 key，导致非所有者会话的回收把所有者映射删掉，
+          // 进而所有会话集体失效 → 重建 → 再被删，形成每 3 秒一轮的死循环。
+          // 在重做完成前，这里直接拒绝，避免用户一点就把日志刷爆。
+          if (want === 'shared') {
+            sendJson({ ok: false, error: '共享会话模式暂不可用（实现存在缺陷，正在重做）。当前仅支持「按会话分开」。' }, 400);
+            return;
+          }
           if (want !== 'shared' && want !== 'per-conversation') {
             sendJson({ ok: false, error: "sessionMode 必须是 shared 或 per-conversation" }, 400);
             return;
