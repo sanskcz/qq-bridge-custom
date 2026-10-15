@@ -736,7 +736,7 @@ function loadConfig() {
         sendPrivate: true,
         reply: true,
         sendBurst: true,
-        sendForward: true,
+        sendForward: false,   // 已移除「转发聊天记录」功能
         sendMessage: true,
         waitMessages: true,
         feedback: true,
@@ -820,7 +820,10 @@ function loadConfig() {
         checkIntervalMinMs: 30 * 60 * 1000,
         checkIntervalMaxMs: 90 * 60 * 1000,
         idleThresholdMs: 15 * 60 * 1000,
-        probability: 0.3
+        probability: 0.3,
+        // 只对群聊主动搭话。私聊主动发消息 = 给没在等你回复的人推送，尤其陌生人，
+        // 体验和风险都不好；需要时可在控制台关掉这个限制。
+        groupsOnly: true
       },
       feedback: {
         maxLength: 500,
@@ -851,7 +854,7 @@ function loadConfig() {
     sendPrivate: true,
     reply: true,
     sendBurst: true,
-    sendForward: true,
+    sendForward: false,   // 已移除「转发聊天记录」功能
     sendMessage: true,
     waitMessages: true,
     feedback: true,
@@ -3481,6 +3484,81 @@ function personaInjection() {
         // per-conversation = 每个群/私聊各自一个会话（默认，上下文互不干扰）
         // ── 人设（本机新增）：控制台可视化编辑，改完下一条消息即生效 ──
         // ── 预警（配额）设置：条数与配图都可从控制台改 ──
+        // ── 主动搭话（本机新增）────────────────────────────────────────────
+        // 「机器人不怎么发消息」的主因：enabled=false 时它只在被 @ / 叫名字 /
+        // 被提问 / 被拍时才说话，普通群聊完全不参与。
+        if (req.method === 'GET' && url.pathname === '/api/config/proactive') {
+          const p = cfg.socialV2?.proactive ?? {};
+          sendJson({
+            ok: true,
+            enabled: p.enabled !== false,
+            groupsOnly: p.groupsOnly !== false,
+            checkIntervalMinMs: p.checkIntervalMinMs ?? 1800000,
+            checkIntervalMaxMs: p.checkIntervalMaxMs ?? 5400000,
+            idleThresholdMs: p.idleThresholdMs ?? 900000,
+            probability: p.probability ?? 0.3
+          });
+          return;
+        }
+        if (req.method === 'POST' && url.pathname === '/api/config/proactive') {
+          const body = await readBody();
+          const INT = (min, max, label) => (v) => {
+            if (typeof v === 'boolean') throw new Error(label + ' 必须是数字');
+            const s = String(v).trim();
+            if (s === '') throw new Error(label + ' 不能留空');
+            const n = Number(s);
+            if (!Number.isFinite(n)) throw new Error(label + ' 必须是数字');
+            if (n < min || n > max) throw new Error(label + ' 必须在 ' + min + '~' + max + ' 之间');
+            return Math.round(n);
+          };
+          const cur = cfg.socialV2?.proactive ?? {};
+          const next = {
+            enabled: cur.enabled !== false,
+            groupsOnly: cur.groupsOnly !== false,
+            checkIntervalMinMs: cur.checkIntervalMinMs ?? 1800000,
+            checkIntervalMaxMs: cur.checkIntervalMaxMs ?? 5400000,
+            idleThresholdMs: cur.idleThresholdMs ?? 900000,
+            probability: cur.probability ?? 0.3
+          };
+          try {
+            if (body.enabled !== undefined) {
+              if (typeof body.enabled !== 'boolean') throw new Error('开关必须是布尔值');
+              next.enabled = body.enabled;
+            }
+            if (body.groupsOnly !== undefined) {
+              if (typeof body.groupsOnly !== 'boolean') throw new Error('只对群聊必须是布尔值');
+              next.groupsOnly = body.groupsOnly;
+            }
+            if (body.checkIntervalMinMs !== undefined) next.checkIntervalMinMs = INT(60000, 86400000, '最短评估间隔')(body.checkIntervalMinMs);
+            if (body.checkIntervalMaxMs !== undefined) next.checkIntervalMaxMs = INT(60000, 86400000, '最长评估间隔')(body.checkIntervalMaxMs);
+            if (body.idleThresholdMs !== undefined) next.idleThresholdMs = INT(0, 86400000, '安静多久算冷场')(body.idleThresholdMs);
+            if (body.probability !== undefined) {
+              const p = Number(String(body.probability).trim());
+              if (!Number.isFinite(p)) throw new Error('开口概率必须是数字');
+              if (p < 0 || p > 1) throw new Error('开口概率必须在 0~1 之间');
+              next.probability = p;
+            }
+            if (next.checkIntervalMinMs > next.checkIntervalMaxMs) throw new Error('最短评估间隔不能大于最长');
+          } catch (error) {
+            sendJson({ ok: false, error: error?.message ?? String(error) }, 400);
+            return;
+          }
+          try {
+            const configFile = path.join(ROOT, 'config.json');
+            const file = readConfigObject(configFile);
+            file.socialV2 = { ...(file.socialV2 ?? {}), proactive: next };
+            atomicWriteJson(configFile, file);
+            cfg.socialV2 = { ...(cfg.socialV2 ?? {}), proactive: next };   // 热更新
+            log('控制台：主动搭话已更新（enabled=' + next.enabled + '，只对群聊=' + next.groupsOnly
+              + '，安静 ' + Math.round(next.idleThresholdMs / 60000) + ' 分钟后 '
+              + Math.round(next.probability * 100) + '% 概率开口）');
+            sendJson({ ok: true, proactive: next });
+          } catch (error) {
+            sendJson({ ok: false, error: '写入失败：' + (error?.message ?? error) }, 500);
+          }
+          return;
+        }
+
         // ── 会话活跃度与发送节奏（本机新增）────────────────────────────────
         // 活跃度 = AI 自愿潜水的时长范围 + 多久能被叫醒；发送节奏 = 条间间隔与连发。
         // 只影响 reserved2（二代仿真）模式；一代模式用的是另一套 social.* 参数。
@@ -5522,71 +5600,10 @@ function personaInjection() {
         // 隐私提示：允许跨群转发意味着 A 群的发言可能出现在 B 群（A 群成员看不到），
         // 这是明确选择的行为；节点里只带昵称，不带 QQ 号。
         if (req.method === 'POST' && url.pathname === '/api/socialV2/send-forward') {
-          const body = await readBody();
-          const key = String(body.key ?? '').trim();
-          const raw = Array.isArray(body.messages) ? body.messages : [];
-          if (!key) { sendJson({ ok: false, error: 'key 不能为空' }, 400); return; }
-          if (!raw.length) { sendJson({ ok: false, error: 'messages 不能为空' }, 400); return; }
-          // 跨群转发：默认只允许自己的会话；开启 crossGroup 后允许任一活跃智能体令牌，
-          // 但目标必须仍在允许名单内（否则等于任意群都能被灌内容）。
-          const crossGroupOk = cfg.socialV2?.crossGroup === true;
-          const token = req.headers['x-agent-token'];
-          if (token && !crossGroupOk && !agentTokenOk(key, token)) { sendJson({ ok: false, error: 'agent token 无效（跨群转发未开启）' }, 403); return; }
-          if (token && crossGroupOk && !isLiveAgentToken(token)) { sendJson({ ok: false, error: 'agent token 无效' }, 403); return; }
-          if (token && !v2SessionAllowed(key)) { sendJson({ ok: false, error: '目标不在当前模式允许范围内' }, 403); return; }
-          if (token && !v2ToolEnabled('sendForward')) { sendJson({ ok: false, error: '工具未启用：qq_send_forward' }, 403); return; }
-          if (crossGroupOk) {
-            // 跨群时记录来源会话，便于排查「这条是谁转的」
-            const fromKey = canonicalV2Key(body.fromKey ?? '') ?? null;
-            if (fromKey) log('[转发] 来源 ' + fromKey + ' -> 目标 ' + key);
-          }
-
-          const MAX_NODES = 50;
-          const MAX_NODE_CHARS = 200;
-          const MAX_TOTAL_CHARS = 8000;
-          if (raw.length > MAX_NODES) { sendJson({ ok: false, error: '最多 ' + MAX_NODES + ' 条' }, 400); return; }
-
-          let total = 0;
-          const nodes = [];
-          for (const item of raw) {
-            const text = String((item && (item.text ?? item.content)) ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_NODE_CHARS);
-            if (!text) continue;
-            if ([...KNOWN_AGENT_TOKENS].some((tk) => tk && text.includes(tk))) {
-              sendJson({ ok: false, error: '内容包含会话令牌，已阻止转发' }, 400);
-              return;
-            }
-            total += text.length;
-            if (total > MAX_TOTAL_CHARS) { sendJson({ ok: false, error: '转发内容过长（上限 ' + MAX_TOTAL_CHARS + ' 字）' }, 400); return; }
-            const name = String((item && item.name) ?? '群友').replace(/[\r\n]/g, ' ').trim().slice(0, 24) || '群友';
-            nodes.push({ type: 'node', data: { name, uin: String(cfg.ownerQQ ?? ''), content: [{ type: 'text', data: { text } }] } });
-          }
-          if (!nodes.length) { sendJson({ ok: false, error: '没有可转发的有效内容' }, 400); return; }
-
-          const isPrivate = key.startsWith('private:');
-          const targetId = key.slice(key.indexOf(':') + 1);
-          const action = isPrivate ? 'send_private_forward_msg' : 'send_group_forward_msg';
-          const params = isPrivate ? { user_id: Number(targetId), messages: nodes } : { group_id: Number(targetId), messages: nodes };
-          const httpUrl = String(cfg.snowluma?.httpUrl || 'http://127.0.0.1:3000').replace(/\/+$/, '');
-          try {
-            const res = await fetch(httpUrl + '/' + action, {
-              method: 'POST',
-              headers: {
-                'content-type': 'application/json',
-                ...(cfg.snowluma?.accessToken ? { authorization: 'Bearer ' + cfg.snowluma.accessToken } : {})
-              },
-              body: JSON.stringify(params),
-              signal: AbortSignal.timeout(30000)
-            });
-            const out = await res.json().catch(() => ({}));
-            if (!res.ok || out.status !== 'ok' || out.retcode !== 0) {
-              sendJson({ ok: false, error: 'OneBot ' + action + ' 失败: ' + (out.wording || out.retcode || res.status) }, 502);
-              return;
-            }
-            log('[转发] 已向 ' + key + ' 发送合并转发（' + nodes.length + ' 条，' + total + ' 字）');
-            sendJson({ ok: true, key, sent: nodes.length, chars: total, messageId: out.data?.message_id ?? null });
-          } catch (error) {
-            sendJson({ ok: false, error: '转发失败: ' + (error?.message ?? error) }, 502);
-          }
+          // 「转发聊天记录」已按用户要求整体移除。
+          // 这里硬拒绝而不是只关 tools.sendForward 开关：不带 x-agent-token 的调用
+          // （面板/管理侧路径）不会经过 v2ToolEnabled 检查，只关开关会留下仍能转发的后门。
+          sendJson({ ok: false, error: '转发聊天记录功能已移除' }, 403);
           return;
         }
 
@@ -10827,6 +10844,8 @@ function dailyQuotaBucket() {
 
   function scheduleProactiveCheckV2(key) {
     if (cfg.socialV2?.proactive?.enabled === false) return;
+    // 默认只对群聊主动开口：私聊主动发消息等于给没在等你回复的人推送（尤其陌生人）。
+    if (cfg.socialV2?.proactive?.groupsOnly !== false && !key.startsWith('group:')) return;
     if (socialV2.paused || currentMode !== 'reserved2') return;
     if (!isSessionAllowedInCurrentMode(key)) return;
     const st = getSocialV2State(key);

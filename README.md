@@ -221,6 +221,26 @@ npm install        # 安装依赖（postinstall 会自动修补 @snowluma/sdk �
 | `socialV2.autoReplyCheckMs` | 多久检查一次有没有该回的消息 | `30000` |
 
 > 控制台里这些用**分钟/秒**输入（比毫秒直观），保存时自动换算。
+
+#### 主动搭话（自己找话说）
+
+**这是「机器人怎么不发消息」最常见的配置原因。** `enabled: false` 时它只在被 @ /
+叫名字 / 被提问 / 被拍时才说话，普通群聊完全不参与。
+
+| 字段 | 说明 | 默认 |
+| --- | --- | --- |
+| `socialV2.proactive.enabled` | 是否允许主动搭话 | `true` |
+| `socialV2.proactive.groupsOnly` | **只对群聊主动**。私聊主动发消息等于给没在等你回复的人推送（尤其陌生人） | `true` |
+| `socialV2.proactive.checkIntervalMinMs` / `.checkIntervalMaxMs` | 隔多久评估一次群里是否有机会（在这两值间随机） | `1800000` / `5400000` |
+| `socialV2.proactive.idleThresholdMs` | 群里安静多久才算「冷场」（有新消息就不算） | `900000` |
+| `socialV2.proactive.probability` | 冷场时真的开口的概率，`0~1` | `0.3` |
+
+> ⚠️ **`socialV2.wake.preSleepWaitMs` 不要设太大。**
+> 它要求「设置潜水前必须先有一段无新消息的静默窗口」。在活跃群里设成 20 分钟会导致
+> AI **永远无法收尾** —— 表现为日志反复出现「未设置唤醒条件，发送提醒」并最终重置配置。
+> 默认 `300000`（5 分钟）。
+>
+> ⚠️ **`socialV2.sessionMode` 的 `shared` 暂不可用**（详见 MODIFICATIONS.md）。
 > 界面上还带了「安静一点 / 活跃一点 / 恢复默认」三个预设，以及改「最长潜水」时自动收敛「推荐值」的逻辑 ——
 > 避免改一个字段被另一个字段的关联约束卡住。
 

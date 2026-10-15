@@ -136,6 +136,38 @@
       <div style="margin-top:12px"><button class="primary" id="qSave">保存预警设置</button></div>
     </div>
 
+    <!-- 主动搭话 -->
+    <div class="card">
+      <h2>主动搭话（自己找话说）</h2>
+      <div class="hint">
+        关掉时它<b>只在被 @ / 叫名字 / 被提问 / 被拍</b>时才说话，普通群聊完全不参与 ——
+        这通常就是<b>「它怎么不发消息」</b>的原因。打开后它会隔一段时间自己看一眼群里，冷场了就找话说。
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="name">允许主动搭话</div>
+        <span class="tag" id="pmTag"></span>
+        <div class="sw" id="pmEnabled" role="switch" tabindex="0"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="name">只对群聊主动（不给私聊发）</div>
+        <span class="tag" id="pmGroupTag"></span>
+        <div class="sw" id="pmGroupsOnly" role="switch" tabindex="0"></div>
+      </div>
+      <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        <label class="hint">最短评估间隔（分钟）<input id="pmCheckMin" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">隔多久看一次群里</span></label>
+        <label class="hint">最长评估间隔（分钟）<input id="pmCheckMax" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">在这两个值之间随机</span></label>
+        <label class="hint">安静多久算冷场（分钟）<input id="pmIdle" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">群里有新消息就不算冷场</span></label>
+        <label class="hint">开口概率（0~1）<input id="pmProb" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">冷场时真的开口的可能</span></label>
+      </div>
+      <div id="pmWarn" class="hint" style="margin-top:12px;display:none;color:var(--bad);font-weight:600"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="primary" id="pmSave">保存主动搭话</button>
+        <button id="pmPresetQuiet">安静</button>
+        <button id="pmPresetNormal">正常</button>
+        <button id="pmPresetChatty">话多</button>
+      </div>
+    </div>
+
     <!-- 会话活跃度 -->
     <div class="card">
       <h2>会话活跃度</h2>
@@ -152,7 +184,7 @@
       <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
         <label class="hint">每小时最多唤醒<input id="actWakeHour" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">硬上限，防刷屏也防烧钱</span></label>
         <label class="hint">每分钟最多唤醒<input id="actWakeMin" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"></label>
-        <label class="hint">睡前观察窗口（分钟）<input id="actPreSleep" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">想潜水前必须先观察这么久没人说话</span></label>
+        <label class="hint">睡前观察窗口（分钟）<input id="actPreSleep" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">⚠️ 别设太大：它必须先看到这么久没人说话才能收尾。活跃群里设 20 分钟会导致它<b>永远无法收尾</b>，表现为反复"未设置唤醒条件"。默认 5 分钟。</span></label>
         <label class="hint">合并唤醒窗口（秒）<input id="actBatch" type="number" min="0" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--fg);font:inherit"><span style="display:block;font-size:11px;opacity:.75">这几秒内的多条消息合并成一次唤醒</span></label>
       </div>
       <div id="actWarn" class="hint" style="margin-top:12px;display:none;color:var(--bad);font-weight:600"></div>
@@ -589,6 +621,85 @@ async function loadQuota() {
   } catch (e) { /* 端点不存在时静默 */ }
 }
 
+// ── 主动搭话（本机新增）──
+// 这是「机器人不怎么发消息」的主因：默认关闭时它只在被 @ / 叫名字 / 被提问 /
+// 被拍时才说话，普通群聊完全不参与。
+const PM = { enabled: true, groupsOnly: true };
+function pmPaint() {
+  const t = document.getElementById('pmTag');
+  if (t) { t.textContent = PM.enabled ? '已开启' : '已关闭'; t.className = 'tag ' + (PM.enabled ? 'on' : 'off'); }
+  const sw = document.getElementById('pmEnabled');
+  if (sw) sw.setAttribute('aria-checked', String(PM.enabled));
+  const gt = document.getElementById('pmGroupTag');
+  if (gt) { gt.textContent = PM.groupsOnly ? '仅群聊' : '群聊+私聊'; gt.className = 'tag ' + (PM.groupsOnly ? 'on' : 'off'); }
+  const gw = document.getElementById('pmGroupsOnly');
+  if (gw) gw.setAttribute('aria-checked', String(PM.groupsOnly));
+}
+function validateProactive() {
+  const e = {};
+  const int = (id, label, min, max) => {
+    const raw = getNum(id);
+    if (raw === '') { e[id] = label + '不能留空'; return null; }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) { e[id] = label + '必须是数字'; return null; }
+    if (n < min || n > max) { e[id] = label + '必须在 ' + min + '~' + max + ' 之间'; return null; }
+    return n;
+  };
+  const cMin = int('pmCheckMin', '最短评估间隔', 1, 1440);
+  const cMax = int('pmCheckMax', '最长评估间隔', 1, 1440);
+  const idle = int('pmIdle', '安静多久算冷场', 0, 1440);
+  const rawP = getNum('pmProb');
+  let prob = null;
+  if (rawP === '') e.pmProb = '开口概率不能留空';
+  else {
+    prob = Number(rawP);
+    if (!Number.isFinite(prob)) e.pmProb = '开口概率必须是数字';
+    else if (prob < 0 || prob > 1) e.pmProb = '开口概率必须在 0~1 之间';
+  }
+  if (cMin !== null && cMax !== null && cMin > cMax) e.pmCheckMin = '最短间隔不能大于最长间隔';
+  const ok = Object.keys(e).length === 0;
+  return { ok, errors: e, payload: ok ? {
+    enabled: PM.enabled,
+    groupsOnly: PM.groupsOnly,
+    checkIntervalMinMs: cMin * MS_MIN,
+    checkIntervalMaxMs: cMax * MS_MIN,
+    idleThresholdMs: idle * MS_MIN,
+    probability: prob
+  } : null };
+}
+function pmPaintValidation() {
+  const r = validateProactive();
+  for (const id of ['pmCheckMin', 'pmCheckMax', 'pmIdle', 'pmProb']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const bad = r.errors[id];
+    el.style.borderColor = bad ? 'var(--bad)' : 'var(--line)';
+    el.title = bad || '';
+  }
+  const box = document.getElementById('pmWarn');
+  if (box) {
+    box.textContent = r.ok ? '' : '⚠️ ' + Object.values(r.errors).join('；');
+    box.style.display = r.ok ? 'none' : '';
+  }
+  const btn = document.getElementById('pmSave');
+  if (btn) btn.disabled = !r.ok;
+  return r.ok;
+}
+function fillProactive(p) {
+  PM.enabled = p.enabled !== false;
+  PM.groupsOnly = p.groupsOnly !== false;
+  setNum('pmCheckMin', Math.round((p.checkIntervalMinMs ?? 1800000) / MS_MIN));
+  setNum('pmCheckMax', Math.round((p.checkIntervalMaxMs ?? 5400000) / MS_MIN));
+  setNum('pmIdle', Math.round((p.idleThresholdMs ?? 900000) / MS_MIN));
+  setNum('pmProb', p.probability ?? 0.3);
+  pmPaint();
+  pmPaintValidation();
+}
+async function loadProactive() {
+  try { const r = await api('/api/config/proactive'); fillProactive(r); }
+  catch (e) { /* 端点不存在时静默 */ }
+}
+
 // ── 会话活跃度与发送节奏（本机新增）──
 // 界面上用「分钟/秒」输入（比毫秒直观），进出接口时换算成毫秒。
 const ACT = { ms: {}, burst: true };
@@ -731,6 +842,7 @@ async function load() {
     await loadPersona();
     await loadQuota();
     await loadActivity();
+    await loadProactive();
     $('authCard').classList.add('hidden');
     $('main').classList.remove('hidden');
     dirty = false;
@@ -907,6 +1019,40 @@ for (const id of QUOTA_NUM_IDS) {
   el.addEventListener('input', () => { paintQuotaValidation(); dirty = true; });
   el.addEventListener('blur', () => paintQuotaValidation());
 }
+
+// 主动搭话：开关、实时校验、保存、预设
+for (const id of ['pmCheckMin', 'pmCheckMax', 'pmIdle', 'pmProb']) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  el.addEventListener('input', () => { pmPaintValidation(); dirty = true; });
+}
+$('pmEnabled').addEventListener('click', () => { PM.enabled = !PM.enabled; pmPaint(); dirty = true; });
+$('pmGroupsOnly').addEventListener('click', () => { PM.groupsOnly = !PM.groupsOnly; pmPaint(); dirty = true; });
+$('pmSave').addEventListener('click', async () => {
+  const v = validateProactive();
+  if (!pmPaintValidation()) { setMsg('保存失败：' + (Object.values(v.errors)[0] ?? '请检查标红项'), 'err'); return; }
+  setMsg('保存主动搭话中…');
+  try {
+    const r = await api('/api/config/proactive', { method: 'POST', body: JSON.stringify(v.payload) });
+    fillProactive(r.proactive || {});
+    setMsg('主动搭话已保存 ✓（无需重启）', 'ok');
+  } catch (e) { setMsg('保存失败：' + e.message, 'err'); }
+});
+const PM_PRESETS = {
+  quiet: { name: '安静', min: 60, max: 180, idle: 60, prob: 0.2 },
+  normal: { name: '正常', min: 30, max: 90, idle: 30, prob: 0.5 },
+  chatty: { name: '话多', min: 10, max: 30, idle: 10, prob: 0.8 }
+};
+function pmApplyPreset(p) {
+  setNum('pmCheckMin', p.min); setNum('pmCheckMax', p.max);
+  setNum('pmIdle', p.idle); setNum('pmProb', p.prob);
+  pmPaintValidation();
+  dirty = true;
+  setMsg('已填入「' + p.name + '」预设，点「保存主动搭话」生效');
+}
+$('pmPresetQuiet').addEventListener('click', () => pmApplyPreset(PM_PRESETS.quiet));
+$('pmPresetNormal').addEventListener('click', () => pmApplyPreset(PM_PRESETS.normal));
+$('pmPresetChatty').addEventListener('click', () => pmApplyPreset(PM_PRESETS.chatty));
 
 $('qSave').addEventListener('click', async () => {
   // 本地先校验：把问题直接指到具体字段，而不是等服务端返回一句笼统的话

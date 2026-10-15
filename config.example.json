@@ -172,7 +172,7 @@
       "getSelfImage": true,
       "sendVoice": false,
       "getHourlySummary": true,
-      "sendForward": true
+      "sendForward": false
     },
     "wake": {
       "defaultMode": "diving",
@@ -267,7 +267,8 @@
       "checkIntervalMinMs": 1800000,
       "checkIntervalMaxMs": 5400000,
       "idleThresholdMs": 900000,
-      "probability": 0.3
+      "probability": 0.3,
+      "groupsOnly": true
     },
     "feedback": {
       "maxLength": 500,

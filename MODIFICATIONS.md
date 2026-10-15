@@ -173,3 +173,24 @@ DSH 的 DeepSeek 适配器在流式工具调用中会把增量 JSON 与初始快
 - 配额按**条数**而非 token 计：桥接没有向 agent 暴露「今日 token 用量」的接口。
 - 向上游推送更新会覆盖本仓库对 `src/bridge.js`、`src/mcp-snowluma-safe.js` 的改动；
   新增的独立模块（`hourly-summary.mjs`、`daily-quota.mjs`）不受影响。
+
+
+## 转发聊天记录：已移除
+
+按使用者要求，**跨群转发聊天记录的能力已整体移除**，共两处：
+
+| 位置 | 改动 |
+| --- | --- |
+| `socialV2.tools.sendForward` | 默认改为 `false`（两处默认值表） |
+| `POST /api/socialV2/send-forward` | 整块替换为 `403 转发聊天记录功能已移除` |
+
+**为什么连端点一起拒绝，而不是只关工具开关**：不带 `x-agent-token` 的调用
+（面板 / 管理侧路径）不会经过 `v2ToolEnabled()` 检查，只关开关会留下一条仍能转发的后门
+（实测该路径会继续调用 OneBot 的 `send_group_forward_msg`）。
+
+**保留未动的部分**：
+
+- `socialV2.crossGroup` —— 它同时管「跨群读取」（看别的群的最近消息 / 小时摘要），
+  这是使用者明确需要的功能，因此只摘掉转发，不动它。
+- **被动转发**：别人发来的 `[转发消息 id=...]` 卡片内容**仍可被读取**。
+  若连这个也要禁止，需要另行改动 `qq_get_forward_msg`。
